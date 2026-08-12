@@ -24,18 +24,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
-      # 把构建产物提交回仓库根目录，GreasyFork 从 raw URL 同步；
-      # GITHUB_TOKEN 的推送不会再次触发工作流，但会正常触发 webhook 通知 GreasyFork
-      - name: Commit built userscript
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
+        with:
+          name: userscript
+          path: dist/cd2-js.user.js
+      # CI 通过后自动发 release（版本号 = @version，来自 git 提交数）。
+      # 与最新 release 资产相比只有 @version 行不同时跳过，避免文档类改动发布无意义版本。
+      # release 事件会触发 webhook 通知 GreasyFork 从 releases/latest/download 同步。
+      - name: Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -f cd2-js.user.js ] && diff <(grep -v '^// @version' cd2-js.user.js) <(grep -v '^// @version' dist/cd2-js.user.js) > /dev/null; then
-            echo "脚本无实质变化，跳过提交"
-            exit 0
+          VERSION=$(grep -m1 '^// @version' dist/cd2-js.user.js | awk '{print $3}')
+          if gh release download --pattern cd2-js.user.js -O previous.user.js 2>/dev/null; then
+            if diff <(grep -v '^// @version' previous.user.js) <(grep -v '^// @version' dist/cd2-js.user.js) > /dev/null; then
+              echo "脚本无实质变化，跳过发布"
+              exit 0
+            fi
           fi
-          cp dist/cd2-js.user.js cd2-js.user.js
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add cd2-js.user.js
-          git commit -m "build: 更新 cd2-js.user.js"
-          git push
+          gh release create "v$VERSION" dist/cd2-js.user.js --title "v$VERSION" --generate-notes
