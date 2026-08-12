@@ -13,7 +13,7 @@ Tampermonkey 脚本：在 [VCB-Studio](https://vcb-s.com/) 页面一键把项目
 ## 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 从 [GitHub Releases](https://github.com/cyrahs/cd2-vcbs-offline/releases/latest/download/cd2-vcbs-offline.user.js) 安装脚本（或从 GreasyFork 安装）
+2. 从 [GitHub Releases](https://github.com/cyrahs/cd2-js/releases/latest/download/cd2-vcbs-offline.user.js) 安装脚本（或从 GreasyFork 安装）
 
 ## 配置
 
