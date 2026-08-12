@@ -28,13 +28,3 @@ jobs:
             dist/cd2-js.user.js \
             --title "$GITHUB_REF_NAME" \
             --generate-notes
-      # 把构建产物推到 release 分支，供 GreasyFork 以 raw URL 同步（webhook 触发需要文件在仓库内）
-      - name: Publish to release branch
-        run: |
-          cd dist
-          git init -b release
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add cd2-js.user.js
-          git commit -m "release $GITHUB_REF_NAME"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release

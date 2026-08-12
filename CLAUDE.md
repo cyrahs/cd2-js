@@ -61,7 +61,7 @@ Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDriv
 
 ## 发布流程
 
-改 `package.json` 的 `version` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z`。Release 工作流会：建 GitHub Release 并附上 `cd2-js.user.js`；把产物强推到 `release` 分支（单 commit，供 GreasyFork 以 raw URL 同步，GitHub webhook 推送事件触发 GreasyFork 即时更新）。GreasyFork 同步源：`https://raw.githubusercontent.com/cyrahs/cd2-js/release/cd2-js.user.js`
+改 `package.json` 的 `version` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z`。Release 工作流建 GitHub Release 并附上 `cd2-js.user.js`。GitHub webhook（release 事件，指向 api.greasyfork.org）通知 GreasyFork 即时同步。GreasyFork 同步源必须是 `https://github.com/cyrahs/cd2-js/releases/latest/download/cd2-js.user.js`（release 事件只匹配 `releases/latest/download/` 前缀或默认分支 raw 地址，见 greasyfork 源码 lib/github.rb）
 
 ## 待办 / 下一步
 
