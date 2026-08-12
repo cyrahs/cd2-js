@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         CloudDrive2助手
 // @namespace    https://github.com/cyrahs/cd2-js
-// @version      0.1.17
+// @version      0.1.19
 // @author       cyrahs
-// @description  CloudDrive2 网页助手：目前支持 VCB-Studio 项目一键添加离线下载并跟踪任务状态
+// @description  CloudDrive2 网页助手：目前支持 VCB-Studio / bangumi.moe 一键添加离线下载并跟踪任务状态
 // @license      MIT
 // @homepageURL  https://github.com/cyrahs/cd2-js
 // @source       https://github.com/cyrahs/cd2-js.git
 // @supportURL   https://github.com/cyrahs/cd2-js/issues
 // @match        https://vcb-s.com/*
+// @match        https://bangumi.moe/*
 // @connect      *
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
@@ -5572,16 +5573,54 @@ responseType: "arraybuffer",
     default: gmFetch,
     gmFetch
   }, Symbol.toStringTag, { value: "Module" }));
+  async function fetchMagnet$1(torrentUrl) {
+    const m = torrentUrl.match(/bangumi\.moe\/torrent\/([0-9a-fA-F]{24})/);
+    if (!m) throw new Error(`URL 中未找到种子 id: ${torrentUrl}`);
+    const res = await gmFetch("https://bangumi.moe/api/torrent/fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ _id: m[1] })
+    });
+    if (!res.ok) throw new Error(`bangumi.moe 请求失败: HTTP ${res.status}`);
+    const t = await res.json();
+    const infoHash = t?.infoHash?.toLowerCase();
+    if (!infoHash) throw new Error("bangumi.moe API 未返回 infohash");
+    return { magnet: t?.magnet || `magnet:?xt=urn:btih:${infoHash}`, infoHash };
+  }
+  function parseMagnet(magnet) {
+    const h = magnet.match(/xt=urn:btih:([0-9a-fA-F]{40}|[A-Z2-7]{32})/);
+    return h ? { magnet, infoHash: h[1].toLowerCase() } : null;
+  }
   async function fetchMagnet(nyaaViewUrl) {
     const res = await gmFetch(nyaaViewUrl, { method: "GET" });
     if (!res.ok) throw new Error(`nyaa.si 请求失败: HTTP ${res.status}`);
     const html = await res.text();
     const m = html.match(/href="(magnet:\?[^"]+)"/);
     if (!m) throw new Error("nyaa.si 页面中未找到磁力链接");
-    const magnet = m[1].replace(/&amp;/g, "&");
-    const h = magnet.match(/xt=urn:btih:([0-9a-fA-F]{40}|[A-Z2-7]{32})/);
-    if (!h) throw new Error("磁力链接中未找到 infohash");
-    return { magnet, infoHash: h[1].toLowerCase() };
+    const info = parseMagnet(m[1].replace(/&amp;/g, "&"));
+    if (!info) throw new Error("磁力链接中未找到 infohash");
+    return info;
+  }
+  const SOURCES = [
+    { site: "nyaa", fetch: fetchMagnet },
+    { site: "bangumi.moe", fetch: fetchMagnet$1 }
+  ];
+  const SOURCE_NAMES = "nyaa.si / bangumi.moe";
+  function hasMagnetSource(links) {
+    return SOURCES.some((s) => links.some((l) => l.site === s.site));
+  }
+  async function resolveMagnet(links) {
+    const errors = [];
+    for (const src of SOURCES) {
+      const link = links.find((l) => l.site === src.site);
+      if (!link) continue;
+      try {
+        return await src.fetch(link.url);
+      } catch (e) {
+        errors.push(`${src.site}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    throw new Error(errors.length > 0 ? errors.join("；") : `未找到支持的下载链接（${SOURCE_NAMES}）`);
   }
   const COLORS = {
     info: "#616161",
@@ -5832,7 +5871,13 @@ responseType: "arraybuffer",
     });
     document.body.appendChild(overlay);
   }
-  async function addToCloud(nyaaUrl, label) {
+  async function addToCloud(links, label) {
+    await addWith(label, () => resolveMagnet(links));
+  }
+  async function addMagnetToCloud(info, label) {
+    await addWith(label, () => Promise.resolve(info));
+  }
+  async function addWith(label, resolve) {
     const cfg = getConfig();
     if (!cfg.grpcBaseUrl || !cfg.apiToken || !cfg.offlineDestPath) {
       createBanner("请先完成 CloudDrive2 配置（地址 / API Token / 离线目标目录）", "error");
@@ -5841,7 +5886,7 @@ responseType: "arraybuffer",
     }
     const id = createBanner(`${label} 解析磁力中…`, "progress");
     try {
-      const { magnet, infoHash } = await fetchMagnet(nyaaUrl);
+      const { magnet, infoHash } = await resolve();
       updateBanner(id, `${label} 提交离线任务中…`, "progress");
       const res = await addOfflineFiles(magnet);
       if (!res.success) {
@@ -5853,6 +5898,94 @@ responseType: "arraybuffer",
     } catch (e) {
       updateBanner(id, `${label} 添加失败: ${e instanceof Error ? e.message : String(e)}`, "error");
     }
+  }
+  function runOnce(el, fn) {
+    el.addEventListener("click", () => {
+      if (el.dataset.cd2Busy) return;
+      el.dataset.cd2Busy = "1";
+      el.style.opacity = "0.6";
+      void fn().finally(() => {
+        delete el.dataset.cd2Busy;
+        el.style.opacity = "1";
+      });
+    });
+  }
+  const INJECTED_ATTR$1 = "data-cd2-bangumi";
+  const CHIP_STYLE = "margin-left:8px;font-size:12px;font-weight:normal;cursor:pointer;color:#fff;background:#9575cd;border-radius:3px;padding:1px 6px;white-space:nowrap;vertical-align:middle;";
+  function shortLabel(title) {
+    const t = (title ?? "").trim() || "种子";
+    return t.length > 40 ? `${t.slice(0, 40)}…` : t;
+  }
+  function torrentLinks(url) {
+    return [{ site: "bangumi.moe", url }];
+  }
+  function makeButton(text) {
+    const a = document.createElement("a");
+    const icon = document.createElement("i");
+    icon.className = "fa fa-cloud-download";
+    a.append(icon, ` ${text}`);
+    return a;
+  }
+  function injectRows() {
+    for (const row of Array.from(document.querySelectorAll("md-item.torrent-row"))) {
+      if (row.hasAttribute(INJECTED_ATTR$1)) continue;
+      const h3 = row.querySelector(".torrent-title h3");
+      if (!h3) continue;
+      row.setAttribute(INJECTED_ATTR$1, "1");
+      const chip = makeButton("CD2");
+      chip.style.cssText = CHIP_STYLE;
+      chip.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      runOnce(chip, () => {
+        const a = row.querySelector('a[href*="/torrent/"]');
+        const title = row.querySelector(".torrent-title span")?.textContent;
+        if (!a) {
+          createBanner("未找到种子链接", "error");
+          return Promise.resolve();
+        }
+        return addToCloud(torrentLinks(a.href), shortLabel(title));
+      });
+      h3.appendChild(chip);
+    }
+  }
+  function injectDialog() {
+    const dlg = document.querySelector("md-dialog.torrent-details-dialog");
+    if (!dlg || dlg.hasAttribute(INJECTED_ATTR$1)) return;
+    const actions = dlg.querySelector(".md-actions");
+    if (!actions) return;
+    dlg.setAttribute(INJECTED_ATTR$1, "1");
+    const btn = makeButton("CD2 离线");
+    btn.className = "md-primary md-button md-default-theme";
+    btn.style.cursor = "pointer";
+    runOnce(btn, () => {
+      const label = shortLabel(dlg.querySelector("a.title-link")?.textContent);
+      const magnetA = actions.querySelector('a[href^="magnet:"]');
+      const info = magnetA ? parseMagnet(magnetA.href) : null;
+      if (info) return addMagnetToCloud(info, label);
+      const idA = dlg.querySelector('a.title-link[href*="/torrent/"]');
+      if (idA) return addToCloud(torrentLinks(idA.href), label);
+      createBanner(`${label} 添加失败: 弹窗中未找到磁力或种子链接`, "error");
+      return Promise.resolve();
+    });
+    actions.insertBefore(btn, actions.querySelector('a[href^="magnet:"]'));
+  }
+  function initBangumiPage() {
+    const process2 = () => {
+      injectRows();
+      injectDialog();
+    };
+    process2();
+    let timer = 0;
+    const observer = new MutationObserver(() => {
+      if (timer) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        process2();
+      }, 150);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
   const ACGNX_HASH_RE = /acgnx\.se\/show-([0-9a-fA-F]{40})\.html/;
   const SITE_PATTERNS = [
@@ -5883,9 +6016,6 @@ responseType: "arraybuffer",
       }
       return { title, infoHash, links, el };
     });
-  }
-  function nyaaLinkOf(box) {
-    return box.links.find((l) => l.site === "nyaa")?.url ?? null;
   }
   function pickBestBox(boxes) {
     if (boxes.length === 0) return null;
@@ -5929,17 +6059,6 @@ responseType: "arraybuffer",
     span.append(icon, ` ${text}`);
     return span;
   }
-  function runOnce(el, fn) {
-    el.addEventListener("click", () => {
-      if (el.dataset.cd2Busy) return;
-      el.dataset.cd2Busy = "1";
-      el.style.opacity = "0.6";
-      void fn().finally(() => {
-        delete el.dataset.cd2Busy;
-        el.style.opacity = "1";
-      });
-    });
-  }
   function initArchivePage() {
     const boxes = extractDwBoxes();
     if (boxes.length === 0) return;
@@ -5948,15 +6067,14 @@ responseType: "arraybuffer",
       if (!row || row.hasAttribute(INJECTED_ATTR)) continue;
       row.setAttribute(INJECTED_ATTR, "1");
       for (const box of boxes) {
-        const nyaa = nyaaLinkOf(box);
         const label = box.title || shortTitle(document.title);
         const btn = makeTagButton(`CD2 离线${box.title ? ` ${box.title}` : ""}`);
-        if (!nyaa) {
+        if (!hasMagnetSource(box.links)) {
           btn.style.opacity = "0.5";
           btn.style.cursor = "default";
-          btn.title = "未找到 nyaa.si 链接";
+          btn.title = `未找到支持的下载链接（${SOURCE_NAMES}）`;
         } else {
-          runOnce(btn, () => addToCloud(nyaa, label));
+          runOnce(btn, () => addToCloud(box.links, label));
         }
         row.append(" ", btn);
       }
@@ -5974,12 +6092,11 @@ responseType: "arraybuffer",
       return;
     }
     const best = pickBestBox(boxes);
-    const nyaa = best ? nyaaLinkOf(best) : null;
-    if (!best || !nyaa) {
-      createBanner(`${label} 添加失败: 详情页中未找到 nyaa.si 下载链接`, "error");
+    if (!best || !hasMagnetSource(best.links)) {
+      createBanner(`${label} 添加失败: 详情页中未找到支持的下载链接（${SOURCE_NAMES}）`, "error");
       return;
     }
-    await addToCloud(nyaa, label);
+    await addToCloud(best.links, label);
   }
   function initListPage() {
     const cards = extractHomeCards();
@@ -5998,6 +6115,10 @@ responseType: "arraybuffer",
   }
   function main() {
     registerSettingsMenu();
+    if (location.hostname === "bangumi.moe") {
+      initBangumiPage();
+      return;
+    }
     if (/^\/archives\/\d+/.test(location.pathname)) {
       initArchivePage();
     } else {
