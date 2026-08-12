@@ -59,6 +59,10 @@ Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDriv
 - 本地 smoke test：scratchpad/smoke/ 有复刻真实 DOM 的 fixture（主页卡片 + 详情页 dw-box + 真实 nyaa.html 快照 + GM stubs），`python3 -m http.server` 起服即可在浏览器中全流程测试（CD2 调用以连接错误告终，属预期错误路径）。真实 vcb-s.com 页面无法直接注入本地脚本（Chrome PNA 拦截 HTTPS→127.0.0.1）
 - 端到端需真实 CD2 实例：`pnpm dev` 装进 Tampermonkey 测试
 
+## 发布流程
+
+改 `package.json` 的 `version` → commit → `git tag vX.Y.Z && git push origin vX.Y.Z`。Release 工作流会：建 GitHub Release 并附上 `cd2-js.user.js`；把产物强推到 `release` 分支（单 commit，供 GreasyFork 以 raw URL 同步，GitHub webhook 推送事件触发 GreasyFork 即时更新）。GreasyFork 同步源：`https://raw.githubusercontent.com/cyrahs/cd2-js/release/cd2-js.user.js`
+
 ## 待办 / 下一步
 
 1. 端到端验证（需用户的真实 CD2 实例 + Tampermonkey）
