@@ -1,4 +1,4 @@
-# cd2-vcbs-offline
+# cd2-js
 
 Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDrive2 (CD2) 离线下载任务并检查状态。
 

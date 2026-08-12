@@ -1,5 +1,5 @@
 {
-  "name": "cd2-vcbs-offline",
+  "name": "cd2-js",
   "version": "0.1.0",
   "description": "Tampermonkey 脚本：一键把 VCB-Studio 项目添加到 CloudDrive2 离线任务并检查",
   "private": true,

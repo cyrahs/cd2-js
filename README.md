@@ -13,7 +13,7 @@ Tampermonkey 脚本：在 [VCB-Studio](https://vcb-s.com/) 页面一键把项目
 ## 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 从 [GitHub Releases](https://github.com/cyrahs/cd2-js/releases/latest/download/cd2-vcbs-offline.user.js) 安装脚本（或从 GreasyFork 安装）
+2. 从 [GitHub Releases](https://github.com/cyrahs/cd2-js/releases/latest/download/cd2-js.user.js) 安装脚本（或从 GreasyFork 安装）
 
 ## 配置
 
@@ -26,7 +26,7 @@ Tampermonkey 脚本：在 [VCB-Studio](https://vcb-s.com/) 页面一键把项目
 ```bash
 pnpm install
 pnpm dev        # 开发模式，Tampermonkey 安装调试脚本
-pnpm build      # 打包到 dist/cd2-vcbs-offline.user.js
+pnpm build      # 打包到 dist/cd2-js.user.js
 pnpm typecheck  # 类型检查
 pnpm gen        # 从 src/proto/clouddrive.proto 重新生成 pb 代码
 ```

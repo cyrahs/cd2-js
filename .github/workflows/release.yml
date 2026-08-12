@@ -25,6 +25,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            dist/cd2-vcbs-offline.user.js \
+            dist/cd2-js.user.js \
             --title "$GITHUB_REF_NAME" \
             --generate-notes
