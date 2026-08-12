@@ -1,12 +1,14 @@
+import { initBangumiPage } from "@/bangumi/page";
 import { addToCloud } from "@/flow";
+import { hasMagnetSource, SOURCE_NAMES } from "@/sites/resolve";
 import { createBanner } from "@/ui/banner";
 import { registerSettingsMenu } from "@/ui/settings";
+import { runOnce } from "@/ui/util";
 import {
   type DwBoxInfo,
   extractDwBoxes,
   extractHomeCards,
   findTagRows,
-  nyaaLinkOf,
   pickBestBox,
   shortTitle,
 } from "@/vcb/extract";
@@ -24,19 +26,6 @@ function makeTagButton(text: string): HTMLSpanElement {
   return span;
 }
 
-/** 点击后置灰防重复提交（banner 会持续反馈，无需恢复） */
-function runOnce(el: HTMLElement, fn: () => Promise<void>) {
-  el.addEventListener("click", () => {
-    if (el.dataset.cd2Busy) return;
-    el.dataset.cd2Busy = "1";
-    el.style.opacity = "0.6";
-    void fn().finally(() => {
-      delete el.dataset.cd2Busy;
-      el.style.opacity = "1";
-    });
-  });
-}
-
 /** 详情页：标签栏为每个下载块注入一个标签按钮 */
 function initArchivePage() {
   const boxes = extractDwBoxes();
@@ -46,15 +35,14 @@ function initArchivePage() {
     if (!row || row.hasAttribute(INJECTED_ATTR)) continue;
     row.setAttribute(INJECTED_ATTR, "1");
     for (const box of boxes) {
-      const nyaa = nyaaLinkOf(box);
       const label = box.title || shortTitle(document.title);
       const btn = makeTagButton(`CD2 离线${box.title ? ` ${box.title}` : ""}`);
-      if (!nyaa) {
+      if (!hasMagnetSource(box.links)) {
         btn.style.opacity = "0.5";
         btn.style.cursor = "default";
-        btn.title = "未找到 nyaa.si 链接";
+        btn.title = `未找到支持的下载链接（${SOURCE_NAMES}）`;
       } else {
-        runOnce(btn, () => addToCloud(nyaa, label));
+        runOnce(btn, () => addToCloud(box.links, label));
       }
       row.append(" ", btn);
     }
@@ -75,12 +63,11 @@ async function addFromCard(archiveUrl: string, label: string): Promise<void> {
   }
 
   const best = pickBestBox(boxes);
-  const nyaa = best ? nyaaLinkOf(best) : null;
-  if (!best || !nyaa) {
-    createBanner(`${label} 添加失败: 详情页中未找到 nyaa.si 下载链接`, "error");
+  if (!best || !hasMagnetSource(best.links)) {
+    createBanner(`${label} 添加失败: 详情页中未找到支持的下载链接（${SOURCE_NAMES}）`, "error");
     return;
   }
-  await addToCloud(nyaa, label);
+  await addToCloud(best.links, label);
 }
 
 /** 主页/列表页：每张发布帖卡片的标签栏注入标签按钮 */
@@ -103,6 +90,10 @@ function initListPage() {
 
 function main() {
   registerSettingsMenu();
+  if (location.hostname === "bangumi.moe") {
+    initBangumiPage();
+    return;
+  }
   if (/^\/archives\/\d+/.test(location.pathname)) {
     initArchivePage();
   } else {

@@ -15,13 +15,15 @@
  * 优先从 acgnx URL 直接提取 infohash 拼 magnet，无需请求任何外站。
  */
 
+import type { SiteLink } from "@/sites/types";
+
 export type DwBoxInfo = {
   /** 版本标题，如 "10-bit 1080p HEVC" */
   title: string;
   /** 从 acgnx 链接提取的 infohash（小写），可能为 null */
   infoHash: string | null;
-  /** 各发布站链接（备用解析源） */
-  links: { site: string; url: string }[];
+  /** 各发布站链接（磁力解析源，优先级见 sites/resolve.ts） */
+  links: SiteLink[];
   /** dw-box 元素本体，用于注入按钮 */
   el: HTMLElement;
 };
@@ -73,11 +75,6 @@ export function magnetOf(infoHash: string, displayName?: string): string {
   let magnet = `magnet:?xt=urn:btih:${infoHash}`;
   if (displayName) magnet += `&dn=${encodeURIComponent(displayName)}`;
   return magnet;
-}
-
-/** 取下载块中的 nyaa.si 链接（磁力默认来源） */
-export function nyaaLinkOf(box: DwBoxInfo): string | null {
-  return box.links.find((l) => l.site === "nyaa")?.url ?? null;
 }
 
 /**
