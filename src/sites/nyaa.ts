@@ -1,10 +1,6 @@
 import gmFetch from "@/grpc/gmFetch";
-
-export type MagnetInfo = {
-  magnet: string;
-  /** 小写 hex infohash（或 base32 原样），用于与 OfflineFile.infoHash 匹配 */
-  infoHash: string;
-};
+import { parseMagnet } from "./magnet";
+import type { MagnetInfo } from "./types";
 
 /**
  * 抓取 nyaa.si 种子详情页并解析 magnet 链接。
@@ -18,10 +14,8 @@ export async function fetchMagnet(nyaaViewUrl: string): Promise<MagnetInfo> {
 
   const m = html.match(/href="(magnet:\?[^"]+)"/);
   if (!m) throw new Error("nyaa.si 页面中未找到磁力链接");
-  const magnet = m[1].replace(/&amp;/g, "&");
+  const info = parseMagnet(m[1].replace(/&amp;/g, "&"));
+  if (!info) throw new Error("磁力链接中未找到 infohash");
 
-  const h = magnet.match(/xt=urn:btih:([0-9a-fA-F]{40}|[A-Z2-7]{32})/);
-  if (!h) throw new Error("磁力链接中未找到 infohash");
-
-  return { magnet, infoHash: h[1].toLowerCase() };
+  return info;
 }

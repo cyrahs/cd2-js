@@ -1,15 +1,25 @@
 import { getConfig } from "@/config";
 import { addOfflineFiles } from "@/grpc/client";
-import { fetchMagnet } from "@/sites/nyaa";
+import { resolveMagnet } from "@/sites/resolve";
+import type { MagnetInfo, SiteLink } from "@/sites/types";
 import { trackTask } from "@/tracker";
 import { createBanner, updateBanner } from "@/ui/banner";
 import { openSettings } from "@/ui/settings";
 
 /**
- * 完整编排：nyaa 链接 → magnet → CD2 离线任务 → 状态跟踪。
+ * 完整编排：发布站链接（按来源优先级解析）→ magnet → CD2 离线任务 → 状态跟踪。
  * @param label banner 中展示的短名称（如动漫名或规格名）
  */
-export async function addToCloud(nyaaUrl: string, label: string): Promise<void> {
+export async function addToCloud(links: SiteLink[], label: string): Promise<void> {
+  await addWith(label, () => resolveMagnet(links));
+}
+
+/** 页面 DOM 中已有现成磁力（如 bangumi.moe 弹窗）时跳过解析请求直接提交 */
+export async function addMagnetToCloud(info: MagnetInfo, label: string): Promise<void> {
+  await addWith(label, () => Promise.resolve(info));
+}
+
+async function addWith(label: string, resolve: () => Promise<MagnetInfo>): Promise<void> {
   const cfg = getConfig();
   if (!cfg.grpcBaseUrl || !cfg.apiToken || !cfg.offlineDestPath) {
     createBanner("请先完成 CloudDrive2 配置（地址 / API Token / 离线目标目录）", "error");
@@ -19,7 +29,7 @@ export async function addToCloud(nyaaUrl: string, label: string): Promise<void> 
 
   const id = createBanner(`${label} 解析磁力中…`, "progress");
   try {
-    const { magnet, infoHash } = await fetchMagnet(nyaaUrl);
+    const { magnet, infoHash } = await resolve();
     updateBanner(id, `${label} 提交离线任务中…`, "progress");
     const res = await addOfflineFiles(magnet);
     if (!res.success) {
