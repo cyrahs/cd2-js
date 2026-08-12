@@ -39,7 +39,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f cd2-js.user.js ] && diff <(grep -v '^// @version' cd2-js.user.js) <(grep -v '^// @version' dist/cd2-js.user.js) > /dev/null; then
-            echo "脚本无实质变化，跳过发布"
+            # 产物无实质变化。但若已提交版本还没有对应 release（上次发布中途失败），用已提交产物补发
+            VERSION=$(grep -m1 '^// @version' cd2-js.user.js | awk '{print $3}')
+            if gh release view "v$VERSION" > /dev/null 2>&1; then
+              echo "脚本无实质变化，跳过发布"
+            else
+              echo "补发 release v$VERSION"
+              gh release create "v$VERSION" cd2-js.user.js \
+                --target "$(git rev-parse HEAD)" \
+                --title "v$VERSION" \
+                --generate-notes
+            fi
             exit 0
           fi
           VERSION=$(grep -m1 '^// @version' dist/cd2-js.user.js | awk '{print $3}')
