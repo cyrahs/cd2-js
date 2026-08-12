@@ -1,7 +1,7 @@
 {
   "name": "cd2-js",
   "version": "0.1.0",
-  "description": "Tampermonkey 脚本：一键把 VCB-Studio 项目添加到 CloudDrive2 离线任务并检查",
+  "description": "CloudDrive2助手：Tampermonkey 脚本，目前支持 VCB-Studio 一键离线下载并跟踪任务状态",
   "private": true,
   "type": "module",
   "license": "MIT",

@@ -15,9 +15,9 @@ export default defineConfig({
     monkey({
       entry: "src/main.ts",
       userscript: {
-        name: "CloudDrive2 · VCB-Studio 一键离线",
+        name: "CloudDrive2助手",
         namespace: "https://github.com/cyrahs/cd2-js",
-        description: "在 VCB-Studio 项目页一键把种子添加到 CloudDrive2 离线下载并检查任务状态",
+        description: "CloudDrive2 网页助手：目前支持 VCB-Studio 项目一键添加离线下载并跟踪任务状态",
         author: "cyrahs",
         homepageURL: "https://github.com/cyrahs/cd2-js",
         supportURL: "https://github.com/cyrahs/cd2-js/issues",
