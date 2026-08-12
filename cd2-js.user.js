@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CloudDrive2助手
 // @namespace    https://github.com/cyrahs/cd2-js
-// @version      0.1.14
+// @version      0.1.17
 // @author       cyrahs
 // @description  CloudDrive2 网页助手：目前支持 VCB-Studio 项目一键添加离线下载并跟踪任务状态
 // @license      MIT
@@ -5600,25 +5600,35 @@ responseType: "arraybuffer",
     document.body.appendChild(container);
     return container;
   }
-  function dismiss(id) {
-    const entry = banners.get(id);
-    if (!entry) return;
+  function dismiss(entry) {
     entry.el.remove();
     if (entry.timer !== null) window.clearTimeout(entry.timer);
-    banners.delete(id);
+    for (const [id, e] of banners) {
+      if (e === entry) banners.delete(id);
+    }
   }
-  function applyKind(entry, id, kind) {
+  function applyKind(entry, kind) {
     entry.el.style.background = COLORS[kind];
     if (entry.timer !== null) {
       window.clearTimeout(entry.timer);
       entry.timer = null;
     }
-    if (kind === "success" || kind === "error") {
-      entry.timer = window.setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+    if (kind === "success") {
+      entry.timer = window.setTimeout(() => dismiss(entry), AUTO_DISMISS_MS);
     }
   }
-  function createBanner(text, kind) {
-    const id = nextId++;
+  function applyAction(entry, action) {
+    entry.actionEl?.remove();
+    entry.actionEl = null;
+    if (!action) return;
+    const btn = document.createElement("button");
+    btn.textContent = action.label;
+    btn.style.cssText = "cursor:pointer;flex-shrink:0;padding:2px 10px;border:1px solid rgba(255,255,255,.6);border-radius:4px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;line-height:1.4;font-family:inherit;";
+    btn.addEventListener("click", action.onClick);
+    entry.el.insertBefore(btn, entry.closeEl);
+    entry.actionEl = btn;
+  }
+  function makeEntry(text, kind, action) {
     const el = document.createElement("div");
     el.style.cssText = "pointer-events:auto;display:flex;align-items:center;gap:10px;max-width:420px;padding:10px 14px;border-radius:6px;color:#fff;font-size:14px;line-height:1.4;font-family:system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.3);word-break:break-all;";
     const textEl = document.createElement("span");
@@ -5626,23 +5636,29 @@ responseType: "arraybuffer",
     const closeEl = document.createElement("span");
     closeEl.textContent = "×";
     closeEl.style.cssText = "cursor:pointer;font-size:18px;flex-shrink:0;opacity:.8;";
-    closeEl.addEventListener("click", () => dismiss(id));
+    closeEl.addEventListener("click", () => dismiss(entry));
     el.append(textEl, closeEl);
     getContainer().appendChild(el);
-    const entry = { el, textEl, timer: null };
-    banners.set(id, entry);
-    applyKind(entry, id, kind);
+    const entry = { el, textEl, closeEl, actionEl: null, timer: null };
+    applyKind(entry, kind);
+    applyAction(entry, action);
+    return entry;
+  }
+  function createBanner(text, kind, action) {
+    const id = nextId++;
+    banners.set(id, makeEntry(text, kind, action));
     return id;
   }
-  function updateBanner(id, text, kind) {
+  function updateBanner(id, text, kind, action) {
     const entry = banners.get(id);
     if (!entry || !entry.el.isConnected) {
-      banners.delete(id);
-      createBanner(text, kind);
+      if (entry?.timer != null) window.clearTimeout(entry.timer);
+      banners.set(id, makeEntry(text, kind, action));
       return;
     }
     entry.textEl.textContent = text;
-    applyKind(entry, id, kind);
+    applyKind(entry, kind);
+    applyAction(entry, action);
   }
   const MAX_PAGES = 3;
   function sleep(ms) {
@@ -5658,17 +5674,48 @@ responseType: "arraybuffer",
     }
     return null;
   }
+  function retryAction(infoHash, bannerId, label) {
+    return { label: "重试检查", onClick: () => void checkOnce(infoHash, bannerId, label) };
+  }
+  async function checkOnce(infoHash, bannerId, label) {
+    const retry = retryAction(infoHash, bannerId, label);
+    updateBanner(bannerId, `${label} 检查中…`, "progress");
+    let task;
+    try {
+      task = await findTask(infoHash);
+    } catch (e) {
+      updateBanner(bannerId, `${label} 检查失败: ${e instanceof Error ? e.message : String(e)}`, "error", retry);
+      return;
+    }
+    if (!task) {
+      updateBanner(bannerId, `${label} 任务列表中未找到`, "error", retry);
+      return;
+    }
+    switch (task.status) {
+      case OfflineFileStatus.OFFLINE_FINISHED:
+        updateBanner(bannerId, `${label} 下载成功`, "success");
+        return;
+      case OfflineFileStatus.OFFLINE_ERROR:
+        updateBanner(bannerId, `${label} 下载失败`, "error", retry);
+        return;
+      default:
+        updateBanner(bannerId, `${label} 下载中 ${Math.round(task.percendDone)}%`, "info", retry);
+    }
+  }
   async function trackTask(infoHash, bannerId, label) {
     const cfg = getConfig();
     const total = cfg.pollMaxChecks;
     let lastPercent = 0;
+    let lastError = null;
     for (let n = 1; n <= total; n++) {
       await sleep(cfg.pollIntervalSecs * 1e3);
       let task;
       try {
         task = await findTask(infoHash);
+        lastError = null;
       } catch (e) {
-        updateBanner(bannerId, `${label} 跟踪出错(${n}/${total}): ${e instanceof Error ? e.message : String(e)}`, "progress");
+        lastError = e instanceof Error ? e.message : String(e);
+        updateBanner(bannerId, `${label} 跟踪出错(${n}/${total}): ${lastError}`, "progress");
         continue;
       }
       if (!task) {
@@ -5681,13 +5728,18 @@ responseType: "arraybuffer",
           updateBanner(bannerId, `${label} 下载成功`, "success");
           return;
         case OfflineFileStatus.OFFLINE_ERROR:
-          updateBanner(bannerId, `${label} 下载失败`, "error");
+          updateBanner(bannerId, `${label} 下载失败`, "error", retryAction(infoHash, bannerId, label));
           return;
         default:
           updateBanner(bannerId, `${label} 跟踪下载(${n}/${total}) ${lastPercent}%`, "progress");
       }
     }
-    updateBanner(bannerId, `${label} 跟踪结束，任务仍在进行 ${lastPercent}%`, "info");
+    const retry = retryAction(infoHash, bannerId, label);
+    if (lastError !== null) {
+      updateBanner(bannerId, `${label} 检查失败: ${lastError}`, "error", retry);
+    } else {
+      updateBanner(bannerId, `${label} 跟踪结束，任务仍在进行 ${lastPercent}%`, "info", retry);
+    }
   }
   function registerSettingsMenu() {
     _GM_registerMenuCommand("CloudDrive2 设置", openSettings);
