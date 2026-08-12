@@ -5,6 +5,12 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "author": "cyrahs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyrahs/cd2-vcbs-offline.git"
+  },
+  "packageManager": "pnpm@11.12.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
