@@ -2,6 +2,9 @@
 
 export type BannerKind = "info" | "progress" | "success" | "error";
 
+/** banner 内嵌的操作按钮（如失败后的「重试检查」） */
+export type BannerAction = { label: string; onClick: () => void };
+
 const COLORS: Record<BannerKind, string> = {
   info: "#616161",
   progress: "#1565c0",
@@ -14,6 +17,8 @@ const AUTO_DISMISS_MS = 8000;
 type BannerEntry = {
   el: HTMLDivElement;
   textEl: HTMLSpanElement;
+  closeEl: HTMLSpanElement;
+  actionEl: HTMLButtonElement | null;
   timer: number | null;
 };
 
@@ -30,28 +35,41 @@ function getContainer(): HTMLDivElement {
   return container;
 }
 
-function dismiss(id: number) {
-  const entry = banners.get(id);
-  if (!entry) return;
+function dismiss(entry: BannerEntry) {
   entry.el.remove();
   if (entry.timer !== null) window.clearTimeout(entry.timer);
-  banners.delete(id);
+  for (const [id, e] of banners) {
+    if (e === entry) banners.delete(id);
+  }
 }
 
-function applyKind(entry: BannerEntry, id: number, kind: BannerKind) {
+function applyKind(entry: BannerEntry, kind: BannerKind) {
   entry.el.style.background = COLORS[kind];
   if (entry.timer !== null) {
     window.clearTimeout(entry.timer);
     entry.timer = null;
   }
-  if (kind === "success" || kind === "error") {
-    entry.timer = window.setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+  // 失败常驻，需手动关闭；仅成功自动消失
+  if (kind === "success") {
+    entry.timer = window.setTimeout(() => dismiss(entry), AUTO_DISMISS_MS);
   }
 }
 
-export function createBanner(text: string, kind: BannerKind): number {
-  const id = nextId++;
+function applyAction(entry: BannerEntry, action?: BannerAction) {
+  entry.actionEl?.remove();
+  entry.actionEl = null;
+  if (!action) return;
+  const btn = document.createElement("button");
+  btn.textContent = action.label;
+  btn.style.cssText =
+    "cursor:pointer;flex-shrink:0;padding:2px 10px;border:1px solid rgba(255,255,255,.6);border-radius:4px;" +
+    "background:rgba(255,255,255,.15);color:#fff;font-size:12px;line-height:1.4;font-family:inherit;";
+  btn.addEventListener("click", action.onClick);
+  entry.el.insertBefore(btn, entry.closeEl);
+  entry.actionEl = btn;
+}
 
+function makeEntry(text: string, kind: BannerKind, action?: BannerAction): BannerEntry {
   const el = document.createElement("div");
   el.style.cssText =
     "pointer-events:auto;display:flex;align-items:center;gap:10px;max-width:420px;padding:10px 14px;" +
@@ -64,25 +82,32 @@ export function createBanner(text: string, kind: BannerKind): number {
   const closeEl = document.createElement("span");
   closeEl.textContent = "×";
   closeEl.style.cssText = "cursor:pointer;font-size:18px;flex-shrink:0;opacity:.8;";
-  closeEl.addEventListener("click", () => dismiss(id));
+  closeEl.addEventListener("click", () => dismiss(entry));
 
   el.append(textEl, closeEl);
   getContainer().appendChild(el);
 
-  const entry: BannerEntry = { el, textEl, timer: null };
-  banners.set(id, entry);
-  applyKind(entry, id, kind);
+  const entry: BannerEntry = { el, textEl, closeEl, actionEl: null, timer: null };
+  applyKind(entry, kind);
+  applyAction(entry, action);
+  return entry;
+}
+
+export function createBanner(text: string, kind: BannerKind, action?: BannerAction): number {
+  const id = nextId++;
+  banners.set(id, makeEntry(text, kind, action));
   return id;
 }
 
-export function updateBanner(id: number, text: string, kind: BannerKind): void {
+export function updateBanner(id: number, text: string, kind: BannerKind, action?: BannerAction): void {
   const entry = banners.get(id);
   if (!entry || !entry.el.isConnected) {
-    // 已被手动关闭则重新创建，保证终态（下载成功/失败）不会丢失
-    banners.delete(id);
-    createBanner(text, kind);
+    // 已被手动关闭则以同一 id 重新创建，保证终态（下载成功/失败）不丢失且后续更新仍指向它
+    if (entry?.timer != null) window.clearTimeout(entry.timer);
+    banners.set(id, makeEntry(text, kind, action));
     return;
   }
   entry.textEl.textContent = text;
-  applyKind(entry, id, kind);
+  applyKind(entry, kind);
+  applyAction(entry, action);
 }

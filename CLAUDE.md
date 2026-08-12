@@ -50,7 +50,7 @@ Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDriv
 - `src/flow.ts`：编排 nyaa → magnet → AddOfflineFiles → 跟踪；配置缺失时弹设置面板
 - `src/sites/nyaa.ts`：抓 nyaa.si 详情页解析 magnet + infohash（磁力默认来源，用户确认）
 - `src/tracker.ts`：轮询 ListAllOfflineFiles 按 infohash 匹配，banner 显示「跟踪下载(n/N) x%」→ 下载成功/失败；N=轮询次数上限（用户确认语义）
-- `src/ui/banner.ts`：右上角 banner 栈，success/error 8s 自动消失
+- `src/ui/banner.ts`：右上角 banner 栈，success 8s 自动消失；error 常驻需手动关闭，支持内嵌操作按钮（tracker 的失败终态带「重试检查」，点一次单查一次）
 - `src/ui/settings.ts`：GM_registerMenuCommand「CloudDrive2 设置」→ 页内模态框，含 GetSystemInfo 测试连接
 - `src/vcb/extract.ts`：dw-box / 主页卡片解析、`findTagRows` 标签栏注入点、`pickBestBox` 规格评分（分辨率 > HEVC > 10-bit）
 
