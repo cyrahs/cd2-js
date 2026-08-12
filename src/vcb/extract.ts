@@ -101,13 +101,22 @@ export type HomeCard = {
   title: string;
   /** 详情页 URL */
   archiveUrl: string;
-  /** 桌面区块的「阅读全文」按钮，注入点 */
-  readMoreEl: HTMLElement | null;
-  /** 移动端区块，注入点 */
-  mobileSection: HTMLElement | null;
   /** 卡片元素本体 */
   el: HTMLElement;
 };
+
+/**
+ * 标签栏注入点：桌面为 .hidden-xs 内的 div.tag-article（span.label.label-zan 一排），
+ * 移动端无标签栏，对应位置是 .visible-xs 内带 fa-calendar 日期的 <p>。
+ * 主页卡片（section.hidden-xs/visible-xs）与详情页（article 下 div.hidden-xs/visible-xs）结构一致。
+ */
+export function findTagRows(scope: ParentNode): { desktop: HTMLElement | null; mobile: HTMLElement | null } {
+  const desktop = scope.querySelector<HTMLElement>(".hidden-xs .tag-article");
+  const mobile =
+    Array.from(scope.querySelectorAll<HTMLElement>(".visible-xs p")).find((p) => p.querySelector("i.fa-calendar")) ??
+    null;
+  return { desktop, mobile };
+}
 
 /**
  * 主页/列表页发布帖卡片解析。
@@ -123,13 +132,7 @@ export function extractHomeCards(root: ParentNode = document): HomeCard[] {
     if (!titleA) continue;
     const title = titleA.textContent?.trim() ?? "";
     if (!/BDRip/i.test(title)) continue;
-    out.push({
-      title,
-      archiveUrl: titleA.href,
-      readMoreEl: el.querySelector<HTMLElement>("a.read-more"),
-      mobileSection: el.querySelector<HTMLElement>("section.visible-xs"),
-      el,
-    });
+    out.push({ title, archiveUrl: titleA.href, el });
   }
   return out;
 }

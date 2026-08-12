@@ -1,54 +1,63 @@
 import { addToCloud } from "@/flow";
 import { createBanner } from "@/ui/banner";
 import { registerSettingsMenu } from "@/ui/settings";
-import { type DwBoxInfo, extractDwBoxes, extractHomeCards, nyaaLinkOf, pickBestBox, shortTitle } from "@/vcb/extract";
+import {
+  type DwBoxInfo,
+  extractDwBoxes,
+  extractHomeCards,
+  findTagRows,
+  nyaaLinkOf,
+  pickBestBox,
+  shortTitle,
+} from "@/vcb/extract";
 
 const INJECTED_ATTR = "data-cd2-vcbs";
 
-function makeButton(text: string): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.textContent = text;
-  btn.style.cssText =
-    "display:inline-block;padding:5px 12px;border:none;border-radius:4px;cursor:pointer;" +
-    "background:#1565c0;color:#fff;font-size:13px;font-family:system-ui,sans-serif;line-height:1.4;";
-  return btn;
+/** 与站点标签栏一致的按钮：span.label.label-zan + FA4 图标 */
+function makeTagButton(text: string): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.className = "label label-zan";
+  span.style.cursor = "pointer";
+  const icon = document.createElement("i");
+  icon.className = "fa fa-cloud-download";
+  span.append(icon, ` ${text}`);
+  return span;
 }
 
 /** 点击后置灰防重复提交（banner 会持续反馈，无需恢复） */
-function runOnce(btn: HTMLButtonElement, fn: () => Promise<void>) {
-  btn.addEventListener("click", () => {
-    if (btn.disabled) return;
-    btn.disabled = true;
-    btn.style.opacity = "0.6";
+function runOnce(el: HTMLElement, fn: () => Promise<void>) {
+  el.addEventListener("click", () => {
+    if (el.dataset.cd2Busy) return;
+    el.dataset.cd2Busy = "1";
+    el.style.opacity = "0.6";
     void fn().finally(() => {
-      btn.disabled = false;
-      btn.style.opacity = "1";
+      delete el.dataset.cd2Busy;
+      el.style.opacity = "1";
     });
   });
 }
 
-/** 详情页：每个下载块注入按钮 */
+/** 详情页：标签栏为每个下载块注入一个标签按钮 */
 function initArchivePage() {
   const boxes = extractDwBoxes();
-  for (const box of boxes) {
-    if (box.el.hasAttribute(INJECTED_ATTR)) continue;
-    box.el.setAttribute(INJECTED_ATTR, "1");
-
-    const nyaa = nyaaLinkOf(box);
-    const label = box.title || shortTitle(document.title);
-    const btn = makeButton(`添加到 CD2 离线${box.title ? `（${box.title}）` : ""}`);
-    if (!nyaa) {
-      btn.disabled = true;
-      btn.style.opacity = "0.5";
-      btn.textContent = "未找到 nyaa.si 链接";
-    } else {
-      runOnce(btn, () => addToCloud(nyaa, label));
+  if (boxes.length === 0) return;
+  const rows = findTagRows(document);
+  for (const row of [rows.desktop, rows.mobile]) {
+    if (!row || row.hasAttribute(INJECTED_ATTR)) continue;
+    row.setAttribute(INJECTED_ATTR, "1");
+    for (const box of boxes) {
+      const nyaa = nyaaLinkOf(box);
+      const label = box.title || shortTitle(document.title);
+      const btn = makeTagButton(`CD2 离线${box.title ? ` ${box.title}` : ""}`);
+      if (!nyaa) {
+        btn.style.opacity = "0.5";
+        btn.style.cursor = "default";
+        btn.title = "未找到 nyaa.si 链接";
+      } else {
+        runOnce(btn, () => addToCloud(nyaa, label));
+      }
+      row.append(" ", btn);
     }
-    const p = document.createElement("p");
-    p.style.marginTop = "8px";
-    p.appendChild(btn);
-    box.el.appendChild(p);
   }
 }
 
@@ -74,7 +83,7 @@ async function addFromCard(archiveUrl: string, label: string): Promise<void> {
   await addToCloud(nyaa, label);
 }
 
-/** 主页/列表页：每张发布帖卡片注入按钮 */
+/** 主页/列表页：每张发布帖卡片的标签栏注入标签按钮 */
 function initListPage() {
   const cards = extractHomeCards();
   for (const card of cards) {
@@ -82,19 +91,12 @@ function initListPage() {
     card.el.setAttribute(INJECTED_ATTR, "1");
 
     const label = shortTitle(card.title);
-
-    if (card.readMoreEl) {
-      const btn = makeButton("CD2 离线");
-      btn.className = "pull-right"; // 与「阅读全文」同列浮动
-      btn.style.marginRight = "8px";
+    const rows = findTagRows(card.el);
+    for (const row of [rows.desktop, rows.mobile]) {
+      if (!row) continue;
+      const btn = makeTagButton("CD2 离线");
       runOnce(btn, () => addFromCard(card.archiveUrl, label));
-      card.readMoreEl.insertAdjacentElement("afterend", btn);
-    }
-    if (card.mobileSection) {
-      const btn = makeButton("添加到 CD2 离线");
-      btn.style.marginTop = "6px";
-      runOnce(btn, () => addFromCard(card.archiveUrl, label));
-      card.mobileSection.appendChild(btn);
+      row.append(" ", btn);
     }
   }
 }

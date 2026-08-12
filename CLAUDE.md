@@ -46,13 +46,13 @@ Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDriv
 
 ## 模块结构（第一个功能已实现）
 
-- `src/main.ts`：入口路由。`/archives/*` → 每个 dw-box 注入按钮；其他页（主页/列表）→ 每张 BDRip 卡片注入按钮（桌面「阅读全文」旁 + 移动区块），点击后后台 fetch 详情页选最高规格
+- `src/main.ts`：入口路由。按钮统一做成标签样式（`span.label.label-zan` + FA4 `fa-cloud-download`），注入标签栏（桌面 `.hidden-xs .tag-article`；移动端无标签栏，注入 `.visible-xs` 带 fa-calendar 的日期 `<p>`）。`/archives/*` → 每个 dw-box 一个标签按钮（带规格名）；其他页（主页/列表）→ 每张 BDRip 卡片一个「CD2 离线」标签，点击后后台 fetch 详情页选最高规格
 - `src/flow.ts`：编排 nyaa → magnet → AddOfflineFiles → 跟踪；配置缺失时弹设置面板
 - `src/sites/nyaa.ts`：抓 nyaa.si 详情页解析 magnet + infohash（磁力默认来源，用户确认）
 - `src/tracker.ts`：轮询 ListAllOfflineFiles 按 infohash 匹配，banner 显示「跟踪下载(n/N) x%」→ 下载成功/失败；N=轮询次数上限（用户确认语义）
 - `src/ui/banner.ts`：右上角 banner 栈，success/error 8s 自动消失
 - `src/ui/settings.ts`：GM_registerMenuCommand「CloudDrive2 设置」→ 页内模态框，含 GetSystemInfo 测试连接
-- `src/vcb/extract.ts`：dw-box / 主页卡片解析、`pickBestBox` 规格评分（分辨率 > HEVC > 10-bit）
+- `src/vcb/extract.ts`：dw-box / 主页卡片解析、`findTagRows` 标签栏注入点、`pickBestBox` 规格评分（分辨率 > HEVC > 10-bit）
 
 ## 验证手段
 
