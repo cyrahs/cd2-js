@@ -18,7 +18,7 @@ Tampermonkey 脚本，基于 [CloudDrive2](https://www.clouddrive2.com/)（CD2�
 ## 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 从 [GitHub Releases](https://github.com/cyrahs/cd2-js/releases/latest/download/cd2-js.user.js) 安装脚本（或从 GreasyFork 安装）
+2. [点此安装脚本](https://raw.githubusercontent.com/cyrahs/cd2-js/main/cd2-js.user.js)（或从 GreasyFork 安装）
 
 ## 配置
 
@@ -36,6 +36,8 @@ pnpm build      # 打包到 dist/cd2-js.user.js
 pnpm typecheck  # 类型检查
 pnpm gen        # 从 src/proto/clouddrive.proto 重新生成 pb 代码
 ```
+
+发布：直接 push 到 main。CI 构建后把产物提交到仓库根目录的 `cd2-js.user.js`（`@version` 由 git 提交数自动生成），GreasyFork 通过 webhook 即时同步。
 
 技术要点：CD2 的 gRPC 服务在 Web 端口同时支持 grpc-web，脚本通过 `@connectrpc/connect-web` 直连，并用 `GM_xmlhttpRequest` 实现的 fetch shim 绕过页面 CSP/CORS 限制。
 
