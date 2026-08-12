@@ -44,9 +44,23 @@ Tampermonkey 脚本：在 VCB-Studio 项目页一键把种子添加到 CloudDriv
 - 不用 React/UI 框架，第一个功能只需按钮 + 状态提示
 - `src/proto/clouddrive_pb.ts` 是生成代码（~320KB），已提交以免每次装 buf；proto 升级时用 `pnpm gen` 重新生成
 
+## 模块结构（第一个功能已实现）
+
+- `src/main.ts`：入口路由。`/archives/*` → 每个 dw-box 注入按钮；其他页（主页/列表）→ 每张 BDRip 卡片注入按钮（桌面「阅读全文」旁 + 移动区块），点击后后台 fetch 详情页选最高规格
+- `src/flow.ts`：编排 nyaa → magnet → AddOfflineFiles → 跟踪；配置缺失时弹设置面板
+- `src/sites/nyaa.ts`：抓 nyaa.si 详情页解析 magnet + infohash（磁力默认来源，用户确认）
+- `src/tracker.ts`：轮询 ListAllOfflineFiles 按 infohash 匹配，banner 显示「跟踪下载(n/N) x%」→ 下载成功/失败；N=轮询次数上限（用户确认语义）
+- `src/ui/banner.ts`：右上角 banner 栈，success/error 8s 自动消失
+- `src/ui/settings.ts`：GM_registerMenuCommand「CloudDrive2 设置」→ 页内模态框，含 GetSystemInfo 测试连接
+- `src/vcb/extract.ts`：dw-box / 主页卡片解析、`pickBestBox` 规格评分（分辨率 > HEVC > 10-bit）
+
+## 验证手段
+
+- 本地 smoke test：scratchpad/smoke/ 有复刻真实 DOM 的 fixture（主页卡片 + 详情页 dw-box + 真实 nyaa.html 快照 + GM stubs），`python3 -m http.server` 起服即可在浏览器中全流程测试（CD2 调用以连接错误告终，属预期错误路径）。真实 vcb-s.com 页面无法直接注入本地脚本（Chrome PNA 拦截 HTTPS→127.0.0.1）
+- 端到端需真实 CD2 实例：`pnpm dev` 装进 Tampermonkey 测试
+
 ## 待办 / 下一步
 
-1. main.ts：在每个 dw-box 注入「添加到 CD2 离线」按钮（无 infohash 时走兜底解析）
-2. 提交后轮询 `ListAllOfflineFiles` 按 infoHash 匹配任务，展示状态（进度/完成/失败）
-3. 配置面板（GM_registerMenuCommand 打开）：地址/token/目标路径，附 GetSystemInfo 连通性测试
-4. 可选：多规格帖子的批量添加、Reseed 帖处理
+1. 端到端验证（需用户的真实 CD2 实例 + Tampermonkey）
+2. 可选：nyaa 不可达时的兜底（acgnx URL 自带 infohash，extract.ts 已解析但未接入流程）
+3. 可选：多规格帖子的批量添加、离线任务面板

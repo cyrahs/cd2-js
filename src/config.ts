@@ -9,6 +9,10 @@ export type AppConfig = {
   offlineDestPath: string;
   /** AddOfflineFiles 的 checkFolderAfterSecs：N 秒后自动检查目标目录，0 表示不检查 */
   checkFolderAfterSecs: number;
+  /** 任务状态轮询间隔（秒） */
+  pollIntervalSecs: number;
+  /** 任务状态轮询次数上限，即 banner 中「跟踪下载(n/N)」的 N */
+  pollMaxChecks: number;
 };
 
 const KEY = "cd2_vcbs_config_v1";
@@ -18,6 +22,8 @@ const DEFAULTS: AppConfig = {
   apiToken: "",
   offlineDestPath: "",
   checkFolderAfterSecs: 15,
+  pollIntervalSecs: 10,
+  pollMaxChecks: 5,
 };
 
 export function getConfig(): AppConfig {

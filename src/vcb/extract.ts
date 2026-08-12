@@ -74,3 +74,68 @@ export function magnetOf(infoHash: string, displayName?: string): string {
   if (displayName) magnet += `&dn=${encodeURIComponent(displayName)}`;
   return magnet;
 }
+
+/** 取下载块中的 nyaa.si 链接（磁力默认来源） */
+export function nyaaLinkOf(box: DwBoxInfo): string | null {
+  return box.links.find((l) => l.site === "nyaa")?.url ?? null;
+}
+
+/**
+ * 多规格帖子中选最高规格：分辨率为主键，同分辨率 HEVC>AVC、10-bit/Ma10p>8-bit。
+ * VCB 规格标题形如 "10-bit 1080p HEVC"、"8-bit 720p AVC"、"Ma10p 2160p HEVC"。
+ */
+export function pickBestBox(boxes: DwBoxInfo[]): DwBoxInfo | null {
+  if (boxes.length === 0) return null;
+  const score = (t: string): number => {
+    const res = t.match(/(\d{3,4})p/i);
+    let s = (res ? Number.parseInt(res[1], 10) : 0) * 10;
+    if (/hevc|x265|h\.?265/i.test(t)) s += 5;
+    if (/ma10p|10-?bit/i.test(t)) s += 2;
+    return s;
+  };
+  return boxes.reduce((a, b) => (score(b.title) > score(a.title) ? b : a));
+}
+
+export type HomeCard = {
+  /** 帖子标题 */
+  title: string;
+  /** 详情页 URL */
+  archiveUrl: string;
+  /** 桌面区块的「阅读全文」按钮，注入点 */
+  readMoreEl: HTMLElement | null;
+  /** 移动端区块，注入点 */
+  mobileSection: HTMLElement | null;
+  /** 卡片元素本体 */
+  el: HTMLElement;
+};
+
+/**
+ * 主页/列表页发布帖卡片解析。
+ * 卡片结构（2026-08 实测）：div.article.well.clearfix 内含
+ * section.hidden-xs（桌面，.title-article h1 a 标题，底部 a.read-more）
+ * 与 section.visible-xs（移动）两套结构；仅标题含 "BDRip" 的是发布帖。
+ */
+export function extractHomeCards(root: ParentNode = document): HomeCard[] {
+  const cards = Array.from(root.querySelectorAll<HTMLElement>("div.article.well.clearfix"));
+  const out: HomeCard[] = [];
+  for (const el of cards) {
+    const titleA = el.querySelector<HTMLAnchorElement>('.title-article a[href*="/archives/"]');
+    if (!titleA) continue;
+    const title = titleA.textContent?.trim() ?? "";
+    if (!/BDRip/i.test(title)) continue;
+    out.push({
+      title,
+      archiveUrl: titleA.href,
+      readMoreEl: el.querySelector<HTMLElement>("a.read-more"),
+      mobileSection: el.querySelector<HTMLElement>("section.visible-xs"),
+      el,
+    });
+  }
+  return out;
+}
+
+/** 帖子标题取短名（第一个 / 前的罗马字名），用于 banner 展示 */
+export function shortTitle(title: string): string {
+  const first = title.split("/")[0].trim();
+  return first.length > 0 ? first : title.trim();
+}
