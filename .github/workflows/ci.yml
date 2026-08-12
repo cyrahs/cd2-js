@@ -29,19 +29,27 @@ jobs:
         with:
           name: userscript
           path: dist/cd2-js.user.js
-      # CI 通过后自动发 release（版本号 = @version，来自 git 提交数）。
-      # 与最新 release 资产相比只有 @version 行不同时跳过，避免文档类改动发布无意义版本。
-      # release 事件会触发 webhook 通知 GreasyFork 从 releases/latest/download 同步。
+      # CI 通过后自动发布（版本号 = @version，来自 git 提交数）：
+      # 1. 把产物提交到仓库根目录（GreasyFork 的 webhook 同步走 git 按 tag 读文件，产物必须在 git 树里）
+      # 2. 对产物提交打 tag 发 release，release 事件触发 webhook 通知 GreasyFork
+      # 产物与已提交版本仅 @version 行不同时跳过（文档类改动不发版）。
       - name: Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(grep -m1 '^// @version' dist/cd2-js.user.js | awk '{print $3}')
-          if gh release download --pattern cd2-js.user.js -O previous.user.js 2>/dev/null; then
-            if diff <(grep -v '^// @version' previous.user.js) <(grep -v '^// @version' dist/cd2-js.user.js) > /dev/null; then
-              echo "脚本无实质变化，跳过发布"
-              exit 0
-            fi
+          if [ -f cd2-js.user.js ] && diff <(grep -v '^// @version' cd2-js.user.js) <(grep -v '^// @version' dist/cd2-js.user.js) > /dev/null; then
+            echo "脚本无实质变化，跳过发布"
+            exit 0
           fi
-          gh release create "v$VERSION" dist/cd2-js.user.js --title "v$VERSION" --generate-notes
+          VERSION=$(grep -m1 '^// @version' dist/cd2-js.user.js | awk '{print $3}')
+          cp dist/cd2-js.user.js cd2-js.user.js
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cd2-js.user.js
+          git commit -m "build: cd2-js.user.js v$VERSION"
+          git push
+          gh release create "v$VERSION" dist/cd2-js.user.js \
+            --target "$(git rev-parse HEAD)" \
+            --title "v$VERSION" \
+            --generate-notes
